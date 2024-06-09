@@ -182,55 +182,60 @@ void nats_on_connect(const char* msg) {
   /// TODO we need to retrieve the NATS_ROOT_TOPIC
 
   String nats_debug_blink_topic = natssetup.natsTopic + String(".") + mac_string + String(".blink");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_debug_blink_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_debug_blink_topic);
   nats->subscribe(nats_debug_blink_topic.c_str(), nats_debug_blink_handler);
 
   String nats_mode_topic = natssetup.natsTopic + String(".") + mac_string + String(".mode");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_mode_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_mode_topic);
   nats->subscribe(nats_mode_topic.c_str(), nats_mode_handler);
 
   String nats_ping_topic = natssetup.natsTopic + String(".ping");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_ping_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_ping_topic);
   nats->subscribe(nats_ping_topic.c_str(), nats_ping_handler);
   
   String nats_reset_topic = natssetup.natsTopic + String(".") + mac_string + String(".reset");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_reset_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_reset_topic);
   nats->subscribe(nats_reset_topic.c_str(), nats_reset_handler);
 
   String nats_config_topic = natssetup.natsTopic + String(".") + mac_string + String(".config");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_config_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_config_topic);
   nats->subscribe(nats_config_topic.c_str(), nats_config_handler);
 
   //@TODO the following only need to subscribe upon mode change!
   String nats_dmx_topic = natssetup.natsTopic + String(".") + mac_string + String(".dmx");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_dmx_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_dmx_topic);
   nats->subscribe(nats_dmx_topic.c_str(), nats_dmx_frame_handler);
 
   String nats_delta_dmx_topic = natssetup.natsTopic + String(".") + mac_string + String(".deltadmx");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_delta_dmx_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_delta_dmx_topic);
   nats->subscribe(nats_delta_dmx_topic.c_str(), nats_dmx_delta_frame_handler);
 
   String nats_rgb_topic = natssetup.natsTopic + String(".") + mac_string + String(".rgb");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_rgb_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_rgb_topic);
   nats->subscribe(nats_rgb_topic.c_str(), nats_rgb_frame_handler);
 
   String nats_fx_topic = natssetup.natsTopic + String(".") + mac_string + String(".fx");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_fx_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_fx_topic);
   nats->subscribe(nats_fx_topic.c_str(), nats_fx_handler);
 
   String nats_name_topic = natssetup.natsTopic + String(".") + mac_string + String(".name");
-  DEBUG_PRINT("[NATS] Subscribing: ");
-  DEBUG_PRINTLN(nats_name_topic);
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_name_topic);
   nats->subscribe(nats_name_topic.c_str(), nats_name_handler);
+
+  String nats_WLED_topic = natssetup.natsTopic + String(".") + mac_string + String(".WLED");
+//  DEBUG_PRINT("[NATS] Subscribing: ");
+//  DEBUG_PRINTLN(nats_name_topic);
+  nats->subscribe(nats_WLED_topic.c_str(), nats_WLED_handler);
 
   nats_announce();
 }
@@ -499,9 +504,9 @@ class IRA_NatsIO : public Usermod {
       top[FPSTR(_enabled)] = enabled;
       //save these vars persistently whenever settings are saved
 
-      top[F("NatsServerURL")] = natssetup.natsServer;
-      top[F("NatsPort")]      = natssetup.natsPort;
-      top[F("NatsRootTopic")] = natssetup.natsTopic;
+      top[F("ServerURL")] = natssetup.natsServer;
+      top[F("Port")]      = natssetup.natsPort;
+      top[F("RootTopic")] = natssetup.natsTopic;
     }
 
     /*
@@ -529,16 +534,10 @@ class IRA_NatsIO : public Usermod {
       bool configComplete = !top.isNull();
       configComplete &= getJsonValue(top[FPSTR(_enabled)], enabled,false);
       DEBUG_PRINTLN("[IRA] Read Config");
-      configComplete &= getJsonValue(top["NatsServerURL"], natssetup.natsServer,NATS_SERVER);
-      configComplete &= getJsonValue(top["NatsPort"], natssetup.natsPort,NATS_DEFAULT_PORT);
-      configComplete &= getJsonValue(top["NatsRootTopic"], natssetup.natsTopic,NATS_ROOT_TOPIC);
-      DEBUG_PRINT("NatsServerURL ");
-      DEBUG_PRINTLN(natssetup.natsServer);
-      DEBUG_PRINT("NatsPort ");
-      DEBUG_PRINTLN(natssetup.natsPort);
-      DEBUG_PRINT("NatsRootTopic ");
-      DEBUG_PRINTLN(natssetup.natsTopic);
-      
+      configComplete &= getJsonValue(top["ServerURL"], natssetup.natsServer,NATS_SERVER);
+      configComplete &= getJsonValue(top["Port"], natssetup.natsPort,NATS_DEFAULT_PORT);
+      configComplete &= getJsonValue(top["RootTopic"], natssetup.natsTopic,NATS_ROOT_TOPIC);
+     
       return configComplete;
     }
 
@@ -550,9 +549,9 @@ class IRA_NatsIO : public Usermod {
      */
     void appendConfigData()
     {
-     oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":NatsServer")); oappend(SET_F("',1,'enter URL to NATS server');"));
-     oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":NatsPort")); oappend(SET_F("',1,'enter Nats server port');"));
-     oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":NatsTopic") ); oappend(SET_F("',1,'enter Nats main Topic');")); 
+     oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":ServerURL")); oappend(SET_F("',1,'enter URL to NATS server<i> needs reboot <i>');"));
+     oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":Port")); oappend(SET_F("',1,'enter Nats server port <i> needs reboot <i>');"));
+     oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":RootTopic") ); oappend(SET_F("',1,'enter Nats main Topic <i> needs reconnect <i>');")); 
     }
 
 

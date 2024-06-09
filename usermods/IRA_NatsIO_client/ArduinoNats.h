@@ -345,20 +345,22 @@ CONNECT
 					);*/
 /// TODO include user/password or bypass if not provided
 /// this was flawed in the original code, can be caused by newer release of Nats.io 
-
 			send_fmt(
 					"CONNECT {"
 						"\"verbose\": %s,"
 						"\"pedantic\": %s,"
 						"\"lang\": \"%s\","
-						"\"version\": \"%s\""
+						"\"version\": \"%s\","
+						"\"user\":\"%s\","
+						"\"pass\":\"%s\""
 					"}", 
 					NATS_CONF_VERBOSE? "true" : "false",
 					NATS_CONF_PEDANTIC? "true" : "false",
 					NATS_CLIENT_LANG,
-					NATS_CLIENT_VERSION
-					);					
-			DEBUG_PRINTLN("NATS send connect");
+					NATS_CLIENT_VERSION,
+					(user == NULL)? "" : user,
+					(pass == NULL)? "" : pass);
+
 		}   //@TODO not good enough, need to send "sig": nonce from INFO message if nonce exist
 
 		char* client_readline(size_t cap = 128) {

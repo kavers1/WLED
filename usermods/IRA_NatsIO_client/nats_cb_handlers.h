@@ -22,11 +22,12 @@ void nats_announce()
     if(letter != 0xff)
       name +=  letter;
       
-  }
-  // TODO check what this is abaoutw
-  name = cmDNS;
+  }*/
+  // TODO check what this is abaout
+  String name = cmDNS;
     
   announce_message += String("\"NAME\":\"") + name + String("\",");
+  /*
   // TODO: Add everything in EEPROM,  ...
   announce_message += String("\"pixel_length\": ") + pixel_length + String(",");
   announce_message += String("\"fx\": ") + fx_select + String(",");
@@ -85,7 +86,7 @@ void nats_publish_ir(uint16_t packet, uint8_t teamnr)
 
   nats->publish(ir_topic.c_str(), ir_message.c_str());
 }
-
+/// checked
 void nats_ping_handler(NATS::msg msg) {
     DEBUG_PRINTLN("[NATS] ping message received");
 
@@ -93,19 +94,22 @@ void nats_ping_handler(NATS::msg msg) {
 
     nats_announce();
 }
-
+/// checked
 // This blinks the on-board debug LED a defined number of times (in the message) for board identification
 void nats_debug_blink_handler(NATS::msg msg) {
   DEBUG_PRINTLN("[NATS] debug led blink message received");
   nats->publish(msg.reply, "received!");
-
+// config for LED is set in define
 	int count = atoi(msg.data);
 	while (count-- > 0) {
-		digitalWrite(15, LOW);
+    DEBUG_PRINT("_");
+		digitalWrite(DEBUG_LED, LOW);
 		delay(100);
-		digitalWrite(15, HIGH);
+    DEBUG_PRINT("|");
+		digitalWrite(DEBUG_LED, HIGH);
 		delay(100);
 	}
+  DEBUG_PRINTLN("");
 }
 
 // This sets the operation mode of the board
@@ -117,8 +121,8 @@ void nats_mode_handler(NATS::msg msg) {
     DEBUG_PRINTLN(msg.data);
 
     nats_mode = atoi(msg.data);
-    EEPROM.write(NATS_MODE, nats_mode);
-    EEPROM.commit();
+//    EEPROM.write(NATS_MODE, nats_mode);
+//    EEPROM.commit();
 
     printMode(nats_mode);
 
@@ -178,8 +182,8 @@ void nats_config_handler(NATS::msg msg) {
   DEBUG_PRINT("[NATS] Parameter Value: ");
   DEBUG_PRINTLN(dec_data[2]);
   
-  EEPROM.write(param_index, dec_data[2]);
-  EEPROM.commit();
+//  EEPROM.write(param_index, dec_data[2]);
+//  EEPROM.commit();
 
   nats->publish(msg.reply, "+OK"); 
 }
@@ -270,6 +274,7 @@ void nats_rgb_frame_handler(NATS::msg msg) {
     uint16_t pix_len = (dec_data[2] << 8) + dec_data[3];
 
     // Exit ASAP
+    /// TODO shouldn't this be pix_len + pix_offset > MAX_PIXELS or configured pixels ???
     if(pix_len > MAX_PIXELS)
     {
       DEBUG_PRINTLN("[NATS] Too many pixels");
@@ -301,33 +306,35 @@ void nats_rgb_frame_handler(NATS::msg msg) {
     uint16_t pix_offset = (dec_data[0] << 8) + dec_data[1];
     DEBUG_PRINT("[NATS] RGB Pixel Data Offset: ");
     DEBUG_PRINTLN(pix_offset);
-    
+    /// TODO number of bytes per pixel shouldn't be hardcoded can come from wled config
     DEBUG_PRINT("[NATS] RGB Per Pixel Datapoints: ");
-    DEBUG_PRINTLN(pix_len);                            // @TODO: This needs to be checked & used!, currently A and W are ditched
-
-
+    DEBUG_PRINTLN(3);                            // @TODO: This needs to be checked & used!, currently A and W are ditched
 
     for(int led_index = 0; led_index < pix_len; led_index++) // from 0 increment with #data per pixel
     {
       uint pixel = led_index + pix_offset;
-      strip.setPixelColor(pixel,
-                        dec_data[4 + (led_index*3)],
-                        dec_data[4 + (led_index*3)]+1,
-                        dec_data[4 + (led_index*3)]+2);
-      //leds[pixel].r = dec_data[4 + (led_index*3)];                    // actual data starts at 4th byte
-      //leds[pixel].g = dec_data[4 + (led_index*3) + 1];
-      //leds[pixel].b = dec_data[4 + (led_index*3) + 2];   
-      
-      uint32_t clr = strip.getPixelColor(pixel_length);
 
-      DEBUG_PRINT("[NATS] RGB Pixel: ");
-      DEBUG_PRINT(led_index);
-      DEBUG_PRINT(", R:");
-      DEBUG_PRINT(R(clr));
-      DEBUG_PRINT(" G:");
-      DEBUG_PRINT(G(clr));
-      DEBUG_PRINT(" B:");
-      DEBUG_PRINTLN(B(clr));
+      /// TODO check limits of pixel max number of leds over all segments
+      if (pixel < MAX_LEDS){
+        strip.setPixelColor(pixel,
+                          dec_data[4 + (led_index*3)],
+                          dec_data[4 + (led_index*3) + 1],
+                          dec_data[4 + (led_index*3) + 2]);
+        //leds[pixel].r = dec_data[4 + (led_index*3)];                    // actual data starts at 4th byte
+        //leds[pixel].g = dec_data[4 + (led_index*3) + 1];
+        //leds[pixel].b = dec_data[4 + (led_index*3) + 2];   
+        
+        uint32_t clr = strip.getPixelColor(pixel);
+
+        DEBUG_PRINT("[NATS] RGB Pixel: ");
+        DEBUG_PRINT(pixel);
+        DEBUG_PRINT(", R:");
+        DEBUG_PRINT(R(clr));
+        DEBUG_PRINT(" G:");
+        DEBUG_PRINT(G(clr));
+        DEBUG_PRINT(" B:");
+        DEBUG_PRINTLN(B(clr));
+      }
     }
     DEBUG_PRINT("[NATS] RGB Pixel Data Copied Over!");
     nats->publish(msg.reply, "+OK");  
@@ -477,7 +484,7 @@ void nats_fx_handler(NATS::msg msg) {
     DEBUG_PRINT(" B: ");
     DEBUG_PRINTLN(fx_bgnd_b);
 
-    EEPROM.write(FX_SELECT, fx_select);
+    /*EEPROM.write(FX_SELECT, fx_select);
     EEPROM.write(FX_SPEED, fx_speed);
     EEPROM.write(FX_XFADE, fx_xfade);
 
@@ -489,7 +496,8 @@ void nats_fx_handler(NATS::msg msg) {
     EEPROM.write(FX_BGND_G, fx_bgnd_g);
     EEPROM.write(FX_BGND_B, fx_bgnd_b);
 
-    EEPROM.commit();
+    EEPROM.commit();*/
+    /// TODO send FX data to wled
 
     nats->publish(msg.reply, "+OK");   // Not in the right mode
   }
@@ -518,11 +526,12 @@ void nats_name_handler(NATS::msg msg) {
     DEBUG_PRINT("[NATS] Name request: ");
     String name;
     // send the name back
-    for(uint i = 0; i < dev_name_length-1; i++)   // -1 because is always 0 terminated
+    /*for(uint i = 0; i < dev_name_length-1; i++)   // -1 because is always 0 terminated
     {
       char c = EEPROM.read(DEV_NAME + i);
       name += String(c);
-    }
+    }*/
+    name = cmDNS;
     DEBUG_PRINTLN(name);
     String nats_name_topic = String(natssetup.natsTopic) + String(".") + mac_string + String(".name");
     nats->publish(nats_name_topic.c_str(), name.c_str());
@@ -532,23 +541,36 @@ void nats_name_handler(NATS::msg msg) {
   {
     DEBUG_PRINT("[NATS] Name set,");
     dev_name_length = msg.size;
-    EEPROM.write(DEV_NAME_LENGTH, dev_name_length);
+    // EEPROM.write(DEV_NAME_LENGTH, dev_name_length);
     DEBUG_PRINT(" length:");
     DEBUG_PRINTLN(dev_name_length);
 
     // set the name
     DEBUG_PRINT("[NATS] Name: ");
-
-    for(uint c = 0; c < dev_name_length-1; c++)     // -1 because is always 0 terminated
+    DEBUG_PRINTLN(msg.data);
+    
+    doSerializeConfig = true;
+    strlcpy( cmDNS, &msg.data[0], dev_name_length);
+  
+/*    for(uint c = 0; c < dev_name_length-1; c++)     // -1 because is always 0 terminated
     {
       DEBUG_PRINT(msg.data[c]);
+      cmDNS[c] = msg.data[c];
       //EEPROM.write(DEV_NAME+c, msg.data[c]);
+      /// TODO set cmDNS name and reinitialize MDNS as if we did the settings page
     }
+    cmDNS[dev_name_length-1] = 0;*/
     DEBUG_PRINTLN(" ");
-    EEPROM.commit();
+    // EEPROM.commit();
     delay(1000);    // needed for EEPROM to process
     nats->publish(msg.reply, "+OK");
 
     nats_announce();
   }
+}
+
+void nats_WLED_handler(NATS::msg msg) { 
+  DEBUG_PRINTLN("[NATS] WLED Handler");
+  /// TODO how to repackage the msg as request ?
+  //serveJson(request);
 }
