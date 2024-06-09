@@ -343,6 +343,9 @@ CONNECT
 					NATS_CLIENT_LANG,
 					NATS_CLIENT_VERSION
 					);*/
+/// TODO include user/password or bypass if not provided
+/// this was flawed in the original code, can be caused by newer release of Nats.io 
+
 			send_fmt(
 					"CONNECT {"
 						"\"verbose\": %s,"

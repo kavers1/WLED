@@ -40,12 +40,21 @@ uint    post = 0;       // counter to post status messages
 
 
 WiFiClient client;
-
-NATS nats(
+NATS *nats;
+/*(
 	&client,
 	NATS_SERVER, NATS_DEFAULT_PORT
-);
+);*/
 NATSUtil::NATSServer natsserver;
+
+class NATSSetup{
+  public:
+  String natsServer = NATS_SERVER;
+  int    natsPort   = NATS_DEFAULT_PORT;
+  String natsTopic  = NATS_ROOT_TOPIC;
+};
+
+NATSSetup natssetup;
 
 #include "nats_cb_handlers.h"
   
@@ -170,67 +179,69 @@ void nats_on_connect(const char* msg) {
     nats_print_server_info();
   }
 
-  String nats_debug_blink_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".blink");
+  /// TODO we need to retrieve the NATS_ROOT_TOPIC
+
+  String nats_debug_blink_topic = natssetup.natsTopic + String(".") + mac_string + String(".blink");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_debug_blink_topic);
-  nats.subscribe(nats_debug_blink_topic.c_str(), nats_debug_blink_handler);
+  nats->subscribe(nats_debug_blink_topic.c_str(), nats_debug_blink_handler);
 
-  String nats_mode_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".mode");
+  String nats_mode_topic = natssetup.natsTopic + String(".") + mac_string + String(".mode");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_mode_topic);
-  nats.subscribe(nats_mode_topic.c_str(), nats_mode_handler);
+  nats->subscribe(nats_mode_topic.c_str(), nats_mode_handler);
 
-  String nats_ping_topic = String(NATS_ROOT_TOPIC) + String(".ping");
+  String nats_ping_topic = natssetup.natsTopic + String(".ping");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_ping_topic);
-  nats.subscribe(nats_ping_topic.c_str(), nats_ping_handler);
+  nats->subscribe(nats_ping_topic.c_str(), nats_ping_handler);
   
-  String nats_reset_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".reset");
+  String nats_reset_topic = natssetup.natsTopic + String(".") + mac_string + String(".reset");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_reset_topic);
-  nats.subscribe(nats_reset_topic.c_str(), nats_reset_handler);
+  nats->subscribe(nats_reset_topic.c_str(), nats_reset_handler);
 
-  String nats_config_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".config");
+  String nats_config_topic = natssetup.natsTopic + String(".") + mac_string + String(".config");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_config_topic);
-  nats.subscribe(nats_config_topic.c_str(), nats_config_handler);
+  nats->subscribe(nats_config_topic.c_str(), nats_config_handler);
 
   //@TODO the following only need to subscribe upon mode change!
-  String nats_dmx_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".dmx");
+  String nats_dmx_topic = natssetup.natsTopic + String(".") + mac_string + String(".dmx");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_dmx_topic);
-  nats.subscribe(nats_dmx_topic.c_str(), nats_dmx_frame_handler);
+  nats->subscribe(nats_dmx_topic.c_str(), nats_dmx_frame_handler);
 
-  String nats_delta_dmx_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".deltadmx");
+  String nats_delta_dmx_topic = natssetup.natsTopic + String(".") + mac_string + String(".deltadmx");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_delta_dmx_topic);
-  nats.subscribe(nats_delta_dmx_topic.c_str(), nats_dmx_delta_frame_handler);
+  nats->subscribe(nats_delta_dmx_topic.c_str(), nats_dmx_delta_frame_handler);
 
-  String nats_rgb_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".rgb");
+  String nats_rgb_topic = natssetup.natsTopic + String(".") + mac_string + String(".rgb");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_rgb_topic);
-  nats.subscribe(nats_rgb_topic.c_str(), nats_rgb_frame_handler);
+  nats->subscribe(nats_rgb_topic.c_str(), nats_rgb_frame_handler);
 
-  String nats_fx_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".fx");
+  String nats_fx_topic = natssetup.natsTopic + String(".") + mac_string + String(".fx");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_fx_topic);
-  nats.subscribe(nats_fx_topic.c_str(), nats_fx_handler);
+  nats->subscribe(nats_fx_topic.c_str(), nats_fx_handler);
 
-  String nats_name_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".name");
+  String nats_name_topic = natssetup.natsTopic + String(".") + mac_string + String(".name");
   DEBUG_PRINT("[NATS] Subscribing: ");
   DEBUG_PRINTLN(nats_name_topic);
-  nats.subscribe(nats_name_topic.c_str(), nats_name_handler);
+  nats->subscribe(nats_name_topic.c_str(), nats_name_handler);
 
-  // nats_announce();
+  nats_announce();
 }
 
 void nats_on_error(const char* msg) {
   DEBUG_PRINT("[NATS] Error: ");
   DEBUG_PRINTLN(msg);
   DEBUG_PRINT(" outstanding pings: ");
-  DEBUG_PRINTF("%d",nats.outstanding_pings);
+  DEBUG_PRINTF("%d",nats->outstanding_pings);
   DEBUG_PRINT(" reconnect attempts: ");
-  DEBUG_PRINTF("%d\n",nats.reconnect_attempts);
+  DEBUG_PRINTF("%d\n",nats->reconnect_attempts);
 }
 
 void nats_on_disconnect() {
@@ -250,8 +261,7 @@ class IRA_NatsIO : public Usermod {
 
     // set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
   public:  
-    String _NatsServer;
-    String _NatsTopic;
+
 
   private:
     // string that are used multiple time (this will save some flash memory)
@@ -301,6 +311,7 @@ class IRA_NatsIO : public Usermod {
       //DEBUG_PRINTLN("Hello from my usermod!");
       DEBUG_PRINTLN("starting IRA usermod");
       dev_name_length = 32;
+      nats = new NATS( &client,	natssetup.natsServer.c_str(), natssetup.natsPort);
 
       initDone = true;
     }
@@ -317,14 +328,14 @@ class IRA_NatsIO : public Usermod {
 
       /// NATS
       DEBUG_PRINTLN("[NATS] connecting to nats ...");
-      nats.on_connect = nats_on_connect;
-      nats.on_error = nats_on_error;
-      nats.on_disconnect = nats_on_disconnect;
+      nats->on_connect = nats_on_connect;
+      nats->on_error = nats_on_error;
+      nats->on_disconnect = nats_on_disconnect;
 
-      if(nats.connect())
+      if(nats->connect())
       {
         DEBUG_PRINT(" connected to: ");
-        DEBUG_PRINTLN(NATS_SERVER);
+        DEBUG_PRINTLN(natssetup.natsServer);
         
       }
       else
@@ -351,7 +362,6 @@ class IRA_NatsIO : public Usermod {
 
       // do your magic here
       if (millis() - lastTime > 1000) {
-        DEBUG_PRINTLN("I'm alive!");
         lastTime = millis();
       }
       
@@ -364,7 +374,7 @@ class IRA_NatsIO : public Usermod {
         printMode(ext_mode);
         if (WiFi.status() == WL_CONNECTED)
         {
-          if(nats.connected)
+          if(nats->connected)
           {
             nats_publish_ext_mode(ext_mode);
           }
@@ -375,7 +385,7 @@ class IRA_NatsIO : public Usermod {
       if (WiFi.status() == WL_CONNECTED)
       {
         // make sure new messages are handled
-        nats.process();
+        nats->process();
 
         // send all status info
         post++;
@@ -396,7 +406,7 @@ class IRA_NatsIO : public Usermod {
      */
     void addToJsonInfo(JsonObject& root)
     {
-      // if "u" object does not exist yet wee need to create it
+      // if "u" object does not exist yet we need to create it
       JsonObject user = root["u"];
       if (user.isNull()) user = root.createNestedObject("u");
 
@@ -489,8 +499,9 @@ class IRA_NatsIO : public Usermod {
       top[FPSTR(_enabled)] = enabled;
       //save these vars persistently whenever settings are saved
 
-      top[F("NatsServerURL")] = _NatsServer;
-      top[F("NatsRootTopic")] = _NatsTopic;
+      top[F("NatsServerURL")] = natssetup.natsServer;
+      top[F("NatsPort")]      = natssetup.natsPort;
+      top[F("NatsRootTopic")] = natssetup.natsTopic;
     }
 
     /*
@@ -517,12 +528,17 @@ class IRA_NatsIO : public Usermod {
 
       bool configComplete = !top.isNull();
       configComplete &= getJsonValue(top[FPSTR(_enabled)], enabled,false);
-      //DEBUG_PRINTLN(enabled);
-      configComplete &= getJsonValue(top["NatsServerURL"], _NatsServer,NATS_SERVER);
+      DEBUG_PRINTLN("[IRA] Read Config");
+      configComplete &= getJsonValue(top["NatsServerURL"], natssetup.natsServer,NATS_SERVER);
+      configComplete &= getJsonValue(top["NatsPort"], natssetup.natsPort,NATS_DEFAULT_PORT);
+      configComplete &= getJsonValue(top["NatsRootTopic"], natssetup.natsTopic,NATS_ROOT_TOPIC);
+      DEBUG_PRINT("NatsServerURL ");
+      DEBUG_PRINTLN(natssetup.natsServer);
+      DEBUG_PRINT("NatsPort ");
+      DEBUG_PRINTLN(natssetup.natsPort);
+      DEBUG_PRINT("NatsRootTopic ");
+      DEBUG_PRINTLN(natssetup.natsTopic);
       
-      configComplete &= getJsonValue(top["NatsRootTopic"], _NatsTopic,NATS_ROOT_TOPIC);
-      DEBUG_PRINTLN(_NatsServer);
-      DEBUG_PRINTLN(_NatsTopic);
       return configComplete;
     }
 
@@ -534,7 +550,8 @@ class IRA_NatsIO : public Usermod {
      */
     void appendConfigData()
     {
-     oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":NatsServer")); oappend(SET_F("',1,'enter URL to NATS serv');"));
+     oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":NatsServer")); oappend(SET_F("',1,'enter URL to NATS server');"));
+     oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":NatsPort")); oappend(SET_F("',1,'enter Nats server port');"));
      oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":NatsTopic") ); oappend(SET_F("',1,'enter Nats main Topic');")); 
     }
 

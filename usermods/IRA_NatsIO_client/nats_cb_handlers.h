@@ -42,29 +42,29 @@ void nats_announce()
   announce_message += String("}");
 
   // TODO: Add everything in EEPROM,  ...
-  String announce_topic = String(NATS_ROOT_TOPIC) + String(".announce");
+  String announce_topic = String(natssetup.natsTopic) + String(".announce");
   DEBUG_PRINTLN(announce_topic);
-  nats.publish(announce_topic.c_str(), announce_message.c_str());
+  nats->publish(announce_topic.c_str(), announce_message.c_str());
 }
 
 void nats_publish_status ()
 {
-  String status_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".status");
+  String status_topic = String(natssetup.natsTopic) + String(".") + mac_string + String(".status");
   long rssi = WiFi.RSSI();
   String status_message = String("{\"rssi\": \"") + String(rssi) + String("\"}");
 
-  nats.publish(status_topic.c_str(), status_message.c_str());
+  nats->publish(status_topic.c_str(), status_message.c_str());
 }
 
 void nats_publish_ext_mode(uint mode)
 {
-  String ext_mode_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".ext_mode");
-  nats.publish(ext_mode_topic.c_str(), String(mode, DEC).c_str());
+  String ext_mode_topic = String(natssetup.natsTopic) + String(".") + mac_string + String(".ext_mode");
+  nats->publish(ext_mode_topic.c_str(), String(mode, DEC).c_str());
 }
 
 void nats_publish_ir(uint16_t packet, uint8_t teamnr)
 {
-  String ir_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".ir");
+  String ir_topic = String(natssetup.natsTopic) + String(".") + mac_string + String(".ir");
 
   String ir_message = String("{\"packet\": \"") + String(packet) + String("\",");
 
@@ -83,7 +83,7 @@ void nats_publish_ir(uint16_t packet, uint8_t teamnr)
   }
   ir_message += String("\"team\":\"") + team + String("\"}");
 
-  nats.publish(ir_topic.c_str(), ir_message.c_str());
+  nats->publish(ir_topic.c_str(), ir_message.c_str());
 }
 
 void nats_ping_handler(NATS::msg msg) {
@@ -97,7 +97,7 @@ void nats_ping_handler(NATS::msg msg) {
 // This blinks the on-board debug LED a defined number of times (in the message) for board identification
 void nats_debug_blink_handler(NATS::msg msg) {
   DEBUG_PRINTLN("[NATS] debug led blink message received");
-  nats.publish(msg.reply, "received!");
+  nats->publish(msg.reply, "received!");
 
 	int count = atoi(msg.data);
 	while (count-- > 0) {
@@ -128,7 +128,7 @@ void nats_mode_handler(NATS::msg msg) {
       ir_delay = 0;
     }
   }
-  nats.publish(msg.reply, "+OK");
+  nats->publish(msg.reply, "+OK");
 }
 
 void nats_reset_handler(NATS::msg msg) { 
@@ -181,7 +181,7 @@ void nats_config_handler(NATS::msg msg) {
   EEPROM.write(param_index, dec_data[2]);
   EEPROM.commit();
 
-  nats.publish(msg.reply, "+OK"); 
+  nats->publish(msg.reply, "+OK"); 
 }
 
 /* This receives a complete DMX Frame of 512+1 bytes (allow SC to be set), 513 bytes are Base64 encoded
@@ -204,7 +204,7 @@ void nats_dmx_frame_handler(NATS::msg msg) {
     if(dec_length > 513)
     {
       DEBUG_PRINT("[NATS] Got too many bytes!");
-      nats.publish(msg.reply, "NOK");   // Not in the right mode
+      nats->publish(msg.reply, "NOK");   // Not in the right mode
     }
     else
     {
@@ -224,7 +224,7 @@ void nats_dmx_frame_handler(NATS::msg msg) {
   else
   {
     DEBUG_PRINTLN("[NATS] not in a DMX mode, leaving");
-    nats.publish(msg.reply, "NOK");   // Not in the right mode
+    nats->publish(msg.reply, "NOK");   // Not in the right mode
   }
 }
 
@@ -241,7 +241,7 @@ void nats_dmx_delta_frame_handler(NATS::msg msg) {
   else
   {
     DEBUG_PRINTLN("[NATS] not in a DMX mode, leaving");
-    nats.publish(msg.reply, "NOK, Not in DMX mode");
+    nats->publish(msg.reply, "NOK, Not in DMX mode");
   }
 }
 
@@ -261,7 +261,7 @@ void nats_rgb_frame_handler(NATS::msg msg) {
   {
     if( (ir_delay != 0) && (nats_mode == MODE_RGB_TO_PIXELS_W_IR))
     { 
-      nats.publish(msg.reply, "NOK, IR overruled");   // IR overruled
+      nats->publish(msg.reply, "NOK, IR overruled");   // IR overruled
       return;
     }
 
@@ -273,14 +273,14 @@ void nats_rgb_frame_handler(NATS::msg msg) {
     if(pix_len > MAX_PIXELS)
     {
       DEBUG_PRINTLN("[NATS] Too many pixels");
-      nats.publish(msg.reply, "NOK, Too many pixels");   // Not in the right mode
+      nats->publish(msg.reply, "NOK, Too many pixels");   // Not in the right mode
       return;
     }
 
     if(pix_len == 0)
     {
       DEBUG_PRINTLN("[NATS] Length is 0");
-      nats.publish(msg.reply, "NOK, Length is 0");   // Not ok
+      nats->publish(msg.reply, "NOK, Length is 0");   // Not ok
       return;
     }
 
@@ -330,12 +330,12 @@ void nats_rgb_frame_handler(NATS::msg msg) {
       DEBUG_PRINTLN(B(clr));
     }
     DEBUG_PRINT("[NATS] RGB Pixel Data Copied Over!");
-    nats.publish(msg.reply, "+OK");  
+    nats->publish(msg.reply, "+OK");  
   }
   else
   {
     DEBUG_PRINTLN("[NATS] not in a RGB mode, leaving");
-    nats.publish(msg.reply, "NOK, not in a RGB mode");   // Not in the right mode
+    nats->publish(msg.reply, "NOK, not in a RGB mode");   // Not in the right mode
   }
 }
 
@@ -376,7 +376,7 @@ void nats_old_rgb_frame_handler(NATS::msg msg) {
     if(pix_len > MAX_PIXELS)
     {
       DEBUG_PRINTLN("[NATS] Too many pixels");
-      nats.publish(msg.reply, "NOK, Too many pixels");   // Not in the right mode
+      nats->publish(msg.reply, "NOK, Too many pixels");   // Not in the right mode
       return;
     }
 
@@ -405,13 +405,13 @@ void nats_old_rgb_frame_handler(NATS::msg msg) {
       DEBUG_PRINTLN(B(clr));
     }
     DEBUG_PRINT("[NATS] RGB Pixel Data Copied Over!");
-    nats.publish(msg.reply, "+OK");  
+    nats->publish(msg.reply, "+OK");  
   }
   else
   {
     DEBUG_PRINTLN("[NATS] not in a RGB mode, leaving");
 
-    nats.publish(msg.reply, "NOK, not in RGB mode");   // Not in the right mode
+    nats->publish(msg.reply, "NOK, not in RGB mode");   // Not in the right mode
   }
 }
 
@@ -438,7 +438,7 @@ void nats_fx_handler(NATS::msg msg) {
     if(dec_length == 0)
     {
       DEBUG_PRINTLN("[NATS] Decode_base64 error");
-      nats.publish(msg.reply, "NOK, base64 error");
+      nats->publish(msg.reply, "NOK, base64 error");
       return;
     } 
 
@@ -491,12 +491,12 @@ void nats_fx_handler(NATS::msg msg) {
 
     EEPROM.commit();
 
-    nats.publish(msg.reply, "+OK");   // Not in the right mode
+    nats->publish(msg.reply, "+OK");   // Not in the right mode
   }
   else
   {
     DEBUG_PRINTLN("[NATS] not in a FX mode, leaving");
-    nats.publish(msg.reply, "NOK, not in FX mode");   // Not in the right mode
+    nats->publish(msg.reply, "NOK, not in FX mode");   // Not in the right mode
   }
 }
 
@@ -509,7 +509,7 @@ void nats_name_handler(NATS::msg msg) {
   if(msg.size > 32)
   {
     DEBUG_PRINTLN("[NATS] Name too long, ignoring");
-    nats.publish(msg.reply, "NOK, Name too long");
+    nats->publish(msg.reply, "NOK, Name too long");
     return;
   }
 
@@ -524,8 +524,8 @@ void nats_name_handler(NATS::msg msg) {
       name += String(c);
     }
     DEBUG_PRINTLN(name);
-    String nats_name_topic = String(NATS_ROOT_TOPIC) + String(".") + mac_string + String(".name");
-    nats.publish(nats_name_topic.c_str(), name.c_str());
+    String nats_name_topic = String(natssetup.natsTopic) + String(".") + mac_string + String(".name");
+    nats->publish(nats_name_topic.c_str(), name.c_str());
     return;
   }
   if(msg.size > 1)
@@ -547,7 +547,7 @@ void nats_name_handler(NATS::msg msg) {
     DEBUG_PRINTLN(" ");
     EEPROM.commit();
     delay(1000);    // needed for EEPROM to process
-    nats.publish(msg.reply, "+OK");
+    nats->publish(msg.reply, "+OK");
 
     nats_announce();
   }

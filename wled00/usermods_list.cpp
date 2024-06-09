@@ -9,7 +9,7 @@
  * || || ||
  * \/ \/ \/
  */
-#include "../usermods/EXAMPLE_v2/usermod_v2_example.h"
+//#include "../usermods/EXAMPLE_v2/usermod_v2_example.h"
 
 #ifdef IRA_NATSIO
   #include "../usermods/IRA_NatsIO_client/IRA_NatsIO_client.h"
@@ -215,11 +215,12 @@ void registerUsermods()
    * || || ||
    * \/ \/ \/
    */
-  usermods.add(new MyExampleUsermod());
+  //usermods.add(new MyExampleUsermod());
 
   #ifdef IRA_NATSIO
   usermods.add(new IRA_NatsIO());
   #endif
+  
   #ifdef USERMOD_BATTERY
   usermods.add(new UsermodBattery());
   #endif
