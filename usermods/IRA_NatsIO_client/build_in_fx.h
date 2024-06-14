@@ -241,7 +241,7 @@ void rainbow_spread()
 
 void process_build_in_fx()
 {
-    switch (fx_select)
+    switch (ira_fx_select)
     {
     case FX_PIXEL_LOOP:
         fx_pixel_loop();

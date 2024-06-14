@@ -52,6 +52,7 @@ class NATSSetup{
   String natsServer = NATS_SERVER;
   int    natsPort   = NATS_DEFAULT_PORT;
   String natsTopic  = NATS_ROOT_TOPIC;
+  String natsGroup  = NATS_GROUP;
 };
 
 NATSSetup natssetup;
@@ -80,15 +81,15 @@ void wifi_setMACstring() {
   byte mac[6];
   WiFi.macAddress(mac);
   mac_string =  String(mac[5], HEX) + 
-                String("_") +
+//                String("_") +
                 String(mac[4], HEX) + 
-                String("_") +
+//                String("_") +
                 String(mac[3], HEX) + 
-                String("_") +
+//                String("_") +
                 String(mac[2], HEX) + 
-                String("_") +
+//                String("_") +
                 String(mac[1], HEX) + 
-                String("_") +
+//                String("_") +
                 String(mac[0], HEX);
 }
 
@@ -180,59 +181,63 @@ void nats_on_connect(const char* msg) {
   }
 
   /// TODO we need to retrieve the NATS_ROOT_TOPIC
+  // area3001.ira.{group}.device.{deviceid}.outputs.{output}.{RGB|DMX|WLED}.{payload}
+  // dus nats_root_topic zetten op "are3001.ira.dome.device"
+  
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
 
-  String nats_debug_blink_topic = natssetup.natsTopic + String(".") + mac_string + String(".blink");
+  String nats_debug_blink_topic = natspath + String(".blink");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_debug_blink_topic);
   nats->subscribe(nats_debug_blink_topic.c_str(), nats_debug_blink_handler);
 
-  String nats_mode_topic = natssetup.natsTopic + String(".") + mac_string + String(".mode");
+  String nats_mode_topic = natspath + String(".mode");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_mode_topic);
   nats->subscribe(nats_mode_topic.c_str(), nats_mode_handler);
 
-  String nats_ping_topic = natssetup.natsTopic + String(".ping");
+  String nats_ping_topic = natspath + String(".ping");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_ping_topic);
   nats->subscribe(nats_ping_topic.c_str(), nats_ping_handler);
   
-  String nats_reset_topic = natssetup.natsTopic + String(".") + mac_string + String(".reset");
+  String nats_reset_topic = natspath + String(".reset");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_reset_topic);
   nats->subscribe(nats_reset_topic.c_str(), nats_reset_handler);
 
-  String nats_config_topic = natssetup.natsTopic + String(".") + mac_string + String(".config");
+  String nats_config_topic = natspath + String(".config");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_config_topic);
   nats->subscribe(nats_config_topic.c_str(), nats_config_handler);
 
   //@TODO the following only need to subscribe upon mode change!
-  String nats_dmx_topic = natssetup.natsTopic + String(".") + mac_string + String(".dmx");
+  String nats_dmx_topic = natspath + String(".dmx");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_dmx_topic);
   nats->subscribe(nats_dmx_topic.c_str(), nats_dmx_frame_handler);
 
-  String nats_delta_dmx_topic = natssetup.natsTopic + String(".") + mac_string + String(".deltadmx");
+  String nats_delta_dmx_topic = natspath + String(".deltadmx");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_delta_dmx_topic);
   nats->subscribe(nats_delta_dmx_topic.c_str(), nats_dmx_delta_frame_handler);
 
-  String nats_rgb_topic = natssetup.natsTopic + String(".") + mac_string + String(".rgb");
+  String nats_rgb_topic = natspath + String(".rgb");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_rgb_topic);
   nats->subscribe(nats_rgb_topic.c_str(), nats_rgb_frame_handler);
 
-  String nats_fx_topic = natssetup.natsTopic + String(".") + mac_string + String(".fx");
+  String nats_fx_topic = natspath + String(".fx");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_fx_topic);
   nats->subscribe(nats_fx_topic.c_str(), nats_fx_handler);
 
-  String nats_name_topic = natssetup.natsTopic + String(".") + mac_string + String(".name");
+  String nats_name_topic = natspath + String(".name");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_name_topic);
   nats->subscribe(nats_name_topic.c_str(), nats_name_handler);
 
-  String nats_WLED_topic = natssetup.natsTopic + String(".") + mac_string + String(".WLED");
+  String nats_WLED_topic = natspath + String(".WLED");
 //  DEBUG_PRINT("[NATS] Subscribing: ");
 //  DEBUG_PRINTLN(nats_name_topic);
   nats->subscribe(nats_WLED_topic.c_str(), nats_WLED_handler);
@@ -366,11 +371,8 @@ class IRA_NatsIO : public Usermod {
       if (!enabled || strip.isUpdating()) return;
 
       // do your magic here
-      if (millis() - lastTime > 1000) {
-        lastTime = millis();
-      }
       
-      if (ext_mode != getMode())
+      if ((ext_mode != getMode()) && (millis() -lastTime > 300 ))
       {
         DEBUG_PRINT("[IO] Ext Mode changed: ");
         DEBUG_PRINTF("%d\n",getMode()); 
@@ -383,7 +385,7 @@ class IRA_NatsIO : public Usermod {
           {
             nats_publish_ext_mode(ext_mode);
           }
-          delay(300);
+          lastTime = millis();
         } //against sending too many state changes at once
       }
 
@@ -392,6 +394,7 @@ class IRA_NatsIO : public Usermod {
         // make sure new messages are handled
         nats->process();
 
+        handleLiveViewNats();
         // send all status info
         post++;
         if (post == 100000)
@@ -400,8 +403,15 @@ class IRA_NatsIO : public Usermod {
           post = 0;
         }
       }
+      /// TODO IRA IR interface
+      /// CHECK FOR IR DATA
+      //if (nats_mode == MODE_DMX_TO_PIXELS_W_IR || nats_mode == MODE_RGB_TO_PIXELS_W_IR || nats_mode == MODE_FX_TO_PIXELS_W_IR || nats_mode == MODE_AUTO_FX_W_IR) {
+      //  if (irrecv.decode(&results)) {
+      //    process_IR_data();
+      //  }
+      /// TODO current solution is to tell the IR mode is not implemented
+  
       
-      //yield();        // Needed for FastLED
     }
     
     /*
@@ -440,6 +450,8 @@ class IRA_NatsIO : public Usermod {
 
       JsonObject usermod = root[FPSTR(_name)];
       if (usermod.isNull()) usermod = root.createNestedObject(FPSTR(_name));
+      usermod[F("RootTopic")] = natssetup.natsTopic;
+      usermod[F("Group")]     = natssetup.natsGroup;
 
       //usermod["user0"] = userVar0;
     }
@@ -456,7 +468,8 @@ class IRA_NatsIO : public Usermod {
       JsonObject usermod = root[FPSTR(_name)];
       if (!usermod.isNull()) {
         // expect JSON usermod data in usermod name object: {"ExampleUsermod:{"user0":10}"}
-        userVar0 = usermod["user0"] | userVar0; //if "user0" key exists in JSON, update, else keep old value
+        //userVar0 = usermod["user0"] | userVar0; //if "user0" key exists in JSON, update, else keep old value
+        
       }
       // you can as well check WLED state JSON keys
       //if (root["bri"] == 255) DEBUG_PRINTLN(F("Don't burn down your garage!"));
@@ -507,6 +520,7 @@ class IRA_NatsIO : public Usermod {
       top[F("ServerURL")] = natssetup.natsServer;
       top[F("Port")]      = natssetup.natsPort;
       top[F("RootTopic")] = natssetup.natsTopic;
+      top[F("Group")]     = natssetup.natsGroup;
     }
 
     /*
@@ -537,7 +551,7 @@ class IRA_NatsIO : public Usermod {
       configComplete &= getJsonValue(top["ServerURL"], natssetup.natsServer,NATS_SERVER);
       configComplete &= getJsonValue(top["Port"], natssetup.natsPort,NATS_DEFAULT_PORT);
       configComplete &= getJsonValue(top["RootTopic"], natssetup.natsTopic,NATS_ROOT_TOPIC);
-     
+      configComplete &= getJsonValue(top["Group"], natssetup.natsGroup,NATS_GROUP);
       return configComplete;
     }
 

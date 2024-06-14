@@ -9,7 +9,7 @@ void nats_announce()
 {
   String announce_message = String( "{\"mac_string\": \"") + mac_string + String("\",");   // Add MAC
   announce_message += String("\"IP\":\"") + String(WiFi.localIP()) + String("\",");       // Add IP
-  announce_message += String("\"HWTYPE\":\"") + String("IRA2020") + String("\",");        // Add HW TYPE
+  announce_message += String("\"HWTYPE\":\"") + String("Wemos 32 D mini") + String("\",");        // Add HW TYPE
   announce_message += String("\"HWREV\":\"") + String("Rev.01") + String("\",");          // Add HW board Rev
   announce_message += String("\"EXTMODE\":\"") + String(ext_mode) + String("\",");
   announce_message += String("\"MODE\":\"") + String(nats_mode) + String("\",");
@@ -27,10 +27,10 @@ void nats_announce()
   String name = cmDNS;
     
   announce_message += String("\"NAME\":\"") + name + String("\",");
-  /*
+  
   // TODO: Add everything in EEPROM,  ...
-  announce_message += String("\"pixel_length\": ") + pixel_length + String(",");
-  announce_message += String("\"fx\": ") + fx_select + String(",");
+  announce_message += String("\"pixel_length\": ") + strip.getLengthTotal() + String(",");
+  /* announce_message += String("\"fx\": ") + fx_select + String(",");
   announce_message += String("\"fx_speed\": ") + fx_speed + String(",");
   announce_message += String("\"fx_xfade\": ") + fx_xfade + String(",");
   announce_message += String("\"fx_fgnd_r\": ") + fx_fgnd_r + String(",");
@@ -43,29 +43,86 @@ void nats_announce()
   announce_message += String("}");
 
   // TODO: Add everything in EEPROM,  ...
-  String announce_topic = String(natssetup.natsTopic) + String(".announce");
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String announce_topic = natspath + String(".announce");
   DEBUG_PRINTLN(announce_topic);
   nats->publish(announce_topic.c_str(), announce_message.c_str());
 }
 
 void nats_publish_status ()
 {
-  String status_topic = String(natssetup.natsTopic) + String(".") + mac_string + String(".status");
-  long rssi = WiFi.RSSI();
-  String status_message = String("{\"rssi\": \"") + String(rssi) + String("\"}");
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String status_topic = natspath + String(".status");
+  //long rssi = WiFi.RSSI();
+  //String status_message = String("{\"rssi\": \"") + String(rssi) + String("\"}");
 
-  nats->publish(status_topic.c_str(), status_message.c_str());
+  //nats->publish(status_topic.c_str(), status_message.c_str());
+
+  //==========================================
+    AsyncWebSocketMessageBuffer * buffer;
+
+  if (!requestJSONBufferLock(12)) return;
+
+  JsonObject state = doc.createNestedObject("state");
+  serializeState(state);
+  JsonObject info  = doc.createNestedObject("info");
+  serializeInfo(info);
+
+  size_t len = measureJson(doc);
+  DEBUG_PRINTF("JSON buffer size: %u for WS request (%u).\n", doc.memoryUsage(), len);
+
+  size_t heap1 = ESP.getFreeHeap();
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
+  #ifdef ESP8266
+  if (len>heap1) {
+    DEBUG_PRINTLN(F("Out of memory (WS)!"));
+    nats->publish(msg.reply, F("{\"Success\":false,\"Error\":\"Out of memory\"}"));
+    return;
+  }
+  #endif
+  buffer = ws.makeBuffer(len); // will not allocate correct memory sometimes on ESP8266
+  #ifdef ESP8266
+  size_t heap2 = ESP.getFreeHeap();
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
+  #else
+  size_t heap2 = 0; // ESP32 variants do not have the same issue and will work without checking heap allocation
+  #endif
+  if (!buffer || heap1-heap2<len) {
+    releaseJSONBufferLock();
+    DEBUG_PRINTLN(F("Nats WLED buffer allocation failed."));
+    nats->publish(status_topic.c_str(), F("{\"Success\":false,\"Error\":\"Out of memory\"}"));
+    return; //out of memory
+
+  }
+
+  buffer->lock();
+  serializeJson(doc, (char *)buffer->get(), len);
+
+  DEBUG_PRINT(F("Sending NATS status "));
+  DEBUG_PRINTLN(status_topic);
+  DEBUG_PRINTLN((char *)buffer->get());
+
+  nats->publish(status_topic.c_str(), (char *)buffer->get());
+
+  buffer->unlock();
+
+  releaseJSONBufferLock();
+
+  //==========================================
 }
 
 void nats_publish_ext_mode(uint mode)
 {
-  String ext_mode_topic = String(natssetup.natsTopic) + String(".") + mac_string + String(".ext_mode");
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String ext_mode_topic = natspath + String(".ext_mode");
   nats->publish(ext_mode_topic.c_str(), String(mode, DEC).c_str());
 }
 
 void nats_publish_ir(uint16_t packet, uint8_t teamnr)
 {
-  String ir_topic = String(natssetup.natsTopic) + String(".") + mac_string + String(".ir");
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  
+  String ir_topic = natspath + String(".ir");
 
   String ir_message = String("{\"packet\": \"") + String(packet) + String("\",");
 
@@ -274,8 +331,7 @@ void nats_rgb_frame_handler(NATS::msg msg) {
     uint16_t pix_len = (dec_data[2] << 8) + dec_data[3];
 
     // Exit ASAP
-    /// TODO shouldn't this be pix_len + pix_offset > MAX_PIXELS or configured pixels ???
-    if(pix_len > MAX_PIXELS)
+    if(pix_len > strip.getLengthTotal())
     {
       DEBUG_PRINTLN("[NATS] Too many pixels");
       nats->publish(msg.reply, "NOK, Too many pixels");   // Not in the right mode
@@ -569,8 +625,183 @@ void nats_name_handler(NATS::msg msg) {
   }
 }
 
+boolean natsLive = false;
+unsigned long natsLastLiveTime = 0;
+#define NATS_LIVE_INTERVAL 40
+
+void sendDataNats( NATS::msg msg)
+{
+  AsyncWebSocketMessageBuffer * buffer;
+
+  if (!requestJSONBufferLock(12)) return;
+
+  JsonObject state = doc.createNestedObject("state");
+  serializeState(state);
+  JsonObject info  = doc.createNestedObject("info");
+  serializeInfo(info);
+
+  size_t len = measureJson(doc);
+  DEBUG_PRINTF("JSON buffer size: %u for WS request (%u).\n", doc.memoryUsage(), len);
+
+  size_t heap1 = ESP.getFreeHeap();
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
+  #ifdef ESP8266
+  if (len>heap1) {
+    DEBUG_PRINTLN(F("Out of memory (WS)!"));
+    nats->publish(msg.reply, F("{\"Success\":false,\"Error\":\"Out of memory\"}"));
+    return;
+  }
+  #endif
+  buffer = ws.makeBuffer(len); // will not allocate correct memory sometimes on ESP8266
+  #ifdef ESP8266
+  size_t heap2 = ESP.getFreeHeap();
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
+  #else
+  size_t heap2 = 0; // ESP32 variants do not have the same issue and will work without checking heap allocation
+  #endif
+  if (!buffer || heap1-heap2<len) {
+    releaseJSONBufferLock();
+    DEBUG_PRINTLN(F("Nats WLED buffer allocation failed."));
+    nats->publish(msg.reply, F("{\"Success\":false,\"Error\":\"Out of memory\"}"));
+    return; //out of memory
+
+  }
+
+  buffer->lock();
+  serializeJson(doc, (char *)buffer->get(), len);
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String status_topic = natspath + String(".status");
+  
+  DEBUG_PRINT(F("Sending NATS data "));
+  DEBUG_PRINTLN(status_topic);
+  DEBUG_PRINTLN(msg.reply);
+  DEBUG_PRINTLN((char *)buffer->get());
+
+  nats->publish(status_topic.c_str(), F("{\"Success\":false,\"Error\":\"Out of memory\"}"));
+  if (msg.reply){
+    nats->publish(msg.reply,(char *)buffer->get());
+  }
+  else
+    nats->publish(status_topic.c_str(),(char *)buffer->get());
+  
+  buffer->unlock();
+  releaseJSONBufferLock();
+}
+
 void nats_WLED_handler(NATS::msg msg) { 
   DEBUG_PRINTLN("[NATS] WLED Handler");
-  /// TODO how to repackage the msg as request ?
-  //serveJson(request);
+  DEBUG_PRINT("GOT MESSAGE FROM ") ;
+  DEBUG_PRINTLN(msg.reply) ;
+
+  if (msg.size < 10 && msg.data[0] == 'p') {
+    // application layer ping/pong heartbeat.
+    // client-side socket layer ping packets are unanswered (investigate)
+    nats->publish(msg.reply, "pong");
+    return;
+  }
+
+  bool verboseResponse = false;
+  if (!requestJSONBufferLock(11)) return;
+
+  DeserializationError error = deserializeJson(doc, msg.data, msg.size);
+  JsonObject root = doc.as<JsonObject>();
+  if (error || root.isNull()) {
+    releaseJSONBufferLock();
+    nats->publish(msg.reply, F("{\"Success\":false,\"Error\":\"Empty document or deserialization error\"}"));
+    return;
+  }
+  if (root["v"] && root.size() == 1) {
+    //if the received value is just "{"v":true}", send only to this client
+    verboseResponse = true;
+  } else if (root.containsKey("lv")) {
+    natsLive = root["lv"] ;
+  } else {
+    verboseResponse = deserializeState(root);
+  }
+  releaseJSONBufferLock(); // will clean fileDoc
+
+  if (!interfaceUpdateCallMode) { // individual client response only needed if no WS broadcast soon
+    if (verboseResponse) {
+      sendDataNats(msg);
+    } else {
+      // we have to send something back otherwise WS connection closes
+      nats->publish(msg.reply, F("{\"success\":true}"));
+    }
+  }
+}
+
+
+
+
+bool sendLiveLedsNats()
+{
+  size_t used = strip.getLengthTotal();
+#ifdef ESP8266
+  const size_t MAX_LIVE_LEDS_WS = 256U;
+#else
+  const size_t MAX_LIVE_LEDS_WS = 1024U;
+#endif
+  size_t n = ((used -1)/MAX_LIVE_LEDS_WS) +1; //only serve every n'th LED if count over MAX_LIVE_LEDS_WS
+  size_t pos = (strip.isMatrix ? 4 : 2);  // start of data
+  size_t bufSize = pos + (used/n)*3;
+
+  AsyncWebSocketMessageBuffer * wsBuf = ws.makeBuffer(bufSize);
+  if (!wsBuf) return false; //out of memory
+  uint8_t* buffer = wsBuf->get();
+  buffer[0] = 'L';
+  buffer[1] = 1; //version
+
+#ifndef WLED_DISABLE_2D
+  size_t skipLines = 0;
+  if (strip.isMatrix) {
+    buffer[1] = 2; //version
+    buffer[2] = Segment::maxWidth;
+    buffer[3] = Segment::maxHeight;
+    if (used > MAX_LIVE_LEDS_WS*4) {
+      buffer[2] = Segment::maxWidth/4;
+      buffer[3] = Segment::maxHeight/4;
+      skipLines = 3;
+    } else if (used > MAX_LIVE_LEDS_WS) {
+      buffer[2] = Segment::maxWidth/2;
+      buffer[3] = Segment::maxHeight/2;
+      skipLines = 1;
+    }
+  }
+#endif
+
+  for (size_t i = 0; pos < bufSize -2; i += n)
+  {
+#ifndef WLED_DISABLE_2D
+    if (strip.isMatrix && skipLines) {
+      if ((i/Segment::maxWidth)%(skipLines+1)) i += Segment::maxWidth * skipLines;
+    }
+#endif
+    uint32_t c = strip.getPixelColor(i);
+    uint8_t r = R(c);
+    uint8_t g = G(c);
+    uint8_t b = B(c);
+    uint8_t w = W(c);
+    buffer[pos++] = scale8(qadd8(w, r), strip.getBrightness()); //R, add white channel to RGB channels as a simple RGBW -> RGB map
+    buffer[pos++] = scale8(qadd8(w, g), strip.getBrightness()); //G
+    buffer[pos++] = scale8(qadd8(w, b), strip.getBrightness()); //B
+  }
+
+  /// TODO  send buffer to Nats server
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  
+  String live_topic = natspath + String(".WLED.Live");
+  DEBUG_PRINTLN(live_topic);
+  nats->publish(live_topic.c_str(), buffer);
+  return true;
+}
+
+void handleLiveViewNats()
+{
+  if (millis() - natsLastLiveTime > NATS_LIVE_INTERVAL)
+  {
+    bool success = true;
+    if (natsLive) success = sendLiveLedsNats();
+    natsLastLiveTime = millis();
+    if (!success) natsLastLiveTime -= 20; //try again in 20ms if failed due to non-empty WS queue
+  }
 }

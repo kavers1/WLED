@@ -36,7 +36,8 @@
 // TODO should come from config page
 #define NATS_SERVER     "demo.nats.io"
 //#define NATS_SERVER       "fri3d.triggerwear.io"
-#define NATS_ROOT_TOPIC   "area3001.IRA.WLED"
+#define NATS_ROOT_TOPIC   "area3001.ira"
+#define NATS_GROUP        "dome"
 #define MAX_PIXELS        255       // @TODO this needs to increase, but then memory map needs to be adjusted
 
 #define _IR_ENABLE_DEFAULT_ false     // This has been moved to compiler arguments
