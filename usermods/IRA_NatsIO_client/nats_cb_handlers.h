@@ -3,68 +3,62 @@
 #define B(c) (byte(c))
 #define W(c) (byte((c) >> 24))
 #include <wled.h>
+#include <map>
 #include "defines.h"
 // This is the IRA2020 specific heartbeat signal to announce a device, more then the NATS Ping/Pong it defines the device specific topic roots
 void nats_announce()
 {
-  String announce_message = String( "{\"mac_string\": \"") + mac_string + String("\",");   // Add MAC
+  /// TODO can we save on memory by having those strings in progmem ????
+  String announce_msg = String("{\"name\": \"") + cmDNS + String("\",");
+  announce_msg += String("\"hardware\": \"") + IRA_HARDWARE + String("\",");
+  announce_msg += String("\"version\": \"") + IRA_HW_VERSION + String("\",");
+  announce_msg += String("\"handlers\": ["); 
+  std::map<String, int>::iterator it = subscriptions.begin();
+  if (it != subscriptions.end()) {
+    // first element
+    announce_msg += "\"" + it->first + "\"";
+    it++;
+    // Iterate through the subscriptions and separate them by a colon
+    while (it != subscriptions.end()) {
+        announce_msg += ",\"" + it->first + "\"";
+        ++it;
+    }
+  }
+  
+  announce_msg +="],";
+  announce_msg += String("\"mem_free\": ") +  ESP.getFreeHeap() + String(",");
+  announce_msg += String("\"mem_alloc\": ") + ESP.getMaxAllocHeap();
+  
+  /*String announce_message = String( "{\"mac_string\": \"") + mac_string + String("\",");   // Add MAC
   announce_message += String("\"IP\":\"") + String(WiFi.localIP()) + String("\",");       // Add IP
   announce_message += String("\"HWTYPE\":\"") + String("Wemos 32 D mini") + String("\",");        // Add HW TYPE
   announce_message += String("\"HWREV\":\"") + String("Rev.01") + String("\",");          // Add HW board Rev
   announce_message += String("\"EXTMODE\":\"") + String(ext_mode) + String("\",");
   announce_message += String("\"MODE\":\"") + String(nats_mode) + String("\",");
-  announce_message += String("\"VERSION\":\"") + String(IRA_VERSION) + String("\",");
- /* String name;
-  // send the name back
-  for(uint i = 0; i < dev_name_length-1; i++)       // -1 because is always NULL terminated
-  {
-    char letter = EEPROM.read(DEV_NAME + i);
-    if(letter != 0xff)
-      name +=  letter;
-      
-  }*/
-  // TODO check what this is abaout
-  String name = cmDNS;
-    
-  announce_message += String("\"NAME\":\"") + name + String("\",");
-  
-  // TODO: Add everything in EEPROM,  ...
-  announce_message += String("\"pixel_length\": ") + strip.getLengthTotal() + String(",");
-  /* announce_message += String("\"fx\": ") + fx_select + String(",");
-  announce_message += String("\"fx_speed\": ") + fx_speed + String(",");
-  announce_message += String("\"fx_xfade\": ") + fx_xfade + String(",");
-  announce_message += String("\"fx_fgnd_r\": ") + fx_fgnd_r + String(",");
-  announce_message += String("\"fx_fgnd_g\": ") + fx_fgnd_g + String(",");
-  announce_message += String("\"fx_fgnd_b\": ") + fx_fgnd_b + String(",");
-  announce_message += String("\"fx_bgnd_r\": ") + fx_bgnd_r + String(",");
-  announce_message += String("\"fx_bgnd_g\": ") + fx_bgnd_g + String(",");
-  announce_message += String("\"fx_bgnd_b\": ") + fx_bgnd_b + String(" ");
-*/
-  announce_message += String("}");
+  announce_message += String("\"VERSION\":\"") + String(IRA_VERSION) + String("\",");*/
+ 
+  announce_msg += String("}");
 
-  // TODO: Add everything in EEPROM,  ...
-  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + cmDNS;
   String announce_topic = natspath + String(".announce");
   DEBUG_PRINTLN(announce_topic);
-  nats->publish(announce_topic.c_str(), announce_message.c_str());
+  nats->publish(announce_topic.c_str(), announce_msg.c_str());
 }
 
+/***
+ * publishes the WLED state and info page
+ */
 void nats_publish_status ()
 {
-  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + cmDNS;
   String status_topic = natspath + String(".status");
-  //long rssi = WiFi.RSSI();
-  //String status_message = String("{\"rssi\": \"") + String(rssi) + String("\"}");
 
-  //nats->publish(status_topic.c_str(), status_message.c_str());
-
-  //==========================================
-    AsyncWebSocketMessageBuffer * buffer;
+  AsyncWebSocketMessageBuffer * buffer;
 
   if (!requestJSONBufferLock(12)) return;
 
-  JsonObject state = doc.createNestedObject("state");
-  serializeState(state);
+//  JsonObject state = doc.createNestedObject("state");
+//  serializeState(state);
   JsonObject info  = doc.createNestedObject("info");
   serializeInfo(info);
 
@@ -96,8 +90,9 @@ void nats_publish_status ()
   }
 
   buffer->lock();
-  serializeJson(doc, (char *)buffer->get(), len);
-
+  int length = serializeJson(doc, (char *)buffer->get(), len);
+  /// hack to terminate string
+  buffer->get()[length] = 0;
   DEBUG_PRINT(F("Sending NATS status "));
   DEBUG_PRINTLN(status_topic);
   DEBUG_PRINTLN((char *)buffer->get());
@@ -108,19 +103,23 @@ void nats_publish_status ()
 
   releaseJSONBufferLock();
 
-  //==========================================
 }
 
+/***
+ * Get the current selected IRA mod.
+ */
 void nats_publish_ext_mode(uint mode)
 {
-  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + cmDNS;
   String ext_mode_topic = natspath + String(".ext_mode");
   nats->publish(ext_mode_topic.c_str(), String(mode, DEC).c_str());
 }
-
+/***
+ * This is not functional yet. taken from the original IRA code but is not compatibel with the WLED IR functionality
+ */
 void nats_publish_ir(uint16_t packet, uint8_t teamnr)
 {
-  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + cmDNS;
   
   String ir_topic = natspath + String(".ir");
 
@@ -143,7 +142,9 @@ void nats_publish_ir(uint16_t packet, uint8_t teamnr)
 
   nats->publish(ir_topic.c_str(), ir_message.c_str());
 }
-/// checked
+/***
+ * handle the ping requests by replying with an announce message
+ */
 void nats_ping_handler(NATS::msg msg) {
     DEBUG_PRINTLN("[NATS] ping message received");
 
@@ -151,7 +152,9 @@ void nats_ping_handler(NATS::msg msg) {
 
     nats_announce();
 }
-/// checked
+/***
+ * lets you toggle the debug LED if configured
+ */
 // This blinks the on-board debug LED a defined number of times (in the message) for board identification
 void nats_debug_blink_handler(NATS::msg msg) {
   DEBUG_PRINTLN("[NATS] debug led blink message received");
@@ -168,8 +171,12 @@ void nats_debug_blink_handler(NATS::msg msg) {
 	}
   DEBUG_PRINTLN("");
 }
-
+/***
+ * mode change handler. Here we can change the selected IRA mode
+ */
 // This sets the operation mode of the board
+/// TODO : based on new and old mode unsubscribe service and subscribe to new services
+/// ????   should the mode be stored in the config or state ????
 void nats_mode_handler(NATS::msg msg) { 
   if(nats_mode != atoi(msg.data))
   {
@@ -178,8 +185,6 @@ void nats_mode_handler(NATS::msg msg) {
     DEBUG_PRINTLN(msg.data);
 
     nats_mode = atoi(msg.data);
-//    EEPROM.write(NATS_MODE, nats_mode);
-//    EEPROM.commit();
 
     printMode(nats_mode);
 
@@ -191,7 +196,9 @@ void nats_mode_handler(NATS::msg msg) {
   }
   nats->publish(msg.reply, "+OK");
 }
-
+/***
+ * upon receiving this request WLED will reboot in 2 sec
+ */
 void nats_reset_handler(NATS::msg msg) { 
   DEBUG_PRINTLN("[NATS] Reset CB Handler");
   if(atoi(msg.data))
@@ -208,6 +215,9 @@ void nats_reset_handler(NATS::msg msg) {
   }
 }
 
+/***
+ * should take care of configuration changes. This is not implemented yet
+ */
 /* Accepts 3 bytes
 2 bytes: parameter index
 1 byte: parameter value
@@ -239,9 +249,6 @@ void nats_config_handler(NATS::msg msg) {
   DEBUG_PRINT("[NATS] Parameter Value: ");
   DEBUG_PRINTLN(dec_data[2]);
   
-//  EEPROM.write(param_index, dec_data[2]);
-//  EEPROM.commit();
-
   nats->publish(msg.reply, "+OK"); 
 }
 
@@ -563,7 +570,9 @@ void nats_fx_handler(NATS::msg msg) {
     nats->publish(msg.reply, "NOK, not in FX mode");   // Not in the right mode
   }
 }
-
+/***
+ * set the name of the device. This is also the name used as mDNS name for WLED webaccess
+ */
 /* This is the name callback routine
 max 32 byte name message, ascii encoded
 */
@@ -581,24 +590,17 @@ void nats_name_handler(NATS::msg msg) {
   {
     DEBUG_PRINT("[NATS] Name request: ");
     String name;
-    // send the name back
-    /*for(uint i = 0; i < dev_name_length-1; i++)   // -1 because is always 0 terminated
-    {
-      char c = EEPROM.read(DEV_NAME + i);
-      name += String(c);
-    }*/
     name = cmDNS;
     DEBUG_PRINTLN(name);
-    String nats_name_topic = String(natssetup.natsTopic) + String(".") + mac_string + String(".name");
+    String nats_name_topic = String(natssetup.natsTopic) + String(".") + cmDNS + String(".name");
     nats->publish(nats_name_topic.c_str(), name.c_str());
     return;
   }
   if(msg.size > 1)
   {
     DEBUG_PRINT("[NATS] Name set,");
-    dev_name_length = msg.size;
-    // EEPROM.write(DEV_NAME_LENGTH, dev_name_length);
-    DEBUG_PRINT(" length:");
+    int dev_name_length = msg.size ;
+    DEBUG_PRINT(F(" length:"));
     DEBUG_PRINTLN(dev_name_length);
 
     // set the name
@@ -608,18 +610,11 @@ void nats_name_handler(NATS::msg msg) {
     doSerializeConfig = true;
     strlcpy( cmDNS, &msg.data[0], dev_name_length);
   
-/*    for(uint c = 0; c < dev_name_length-1; c++)     // -1 because is always 0 terminated
-    {
-      DEBUG_PRINT(msg.data[c]);
-      cmDNS[c] = msg.data[c];
-      //EEPROM.write(DEV_NAME+c, msg.data[c]);
-      /// TODO set cmDNS name and reinitialize MDNS as if we did the settings page
-    }
-    cmDNS[dev_name_length-1] = 0;*/
     DEBUG_PRINTLN(" ");
-    // EEPROM.commit();
     delay(1000);    // needed for EEPROM to process
     nats->publish(msg.reply, "+OK");
+
+    /// TODO reinitialize handlers, unsubscribe old handlers
 
     nats_announce();
   }
@@ -668,8 +663,11 @@ void sendDataNats( NATS::msg msg)
   }
 
   buffer->lock();
-  serializeJson(doc, (char *)buffer->get(), len);
-  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  int length = serializeJson(doc, (char *)buffer->get(), len);
+  /// hack to terminate string
+  buffer->get()[length] = 0;
+  
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + cmDNS;
   String status_topic = natspath + String(".status");
   
   DEBUG_PRINT(F("Sending NATS data "));
@@ -677,7 +675,6 @@ void sendDataNats( NATS::msg msg)
   DEBUG_PRINTLN(msg.reply);
   DEBUG_PRINTLN((char *)buffer->get());
 
-  nats->publish(status_topic.c_str(), F("{\"Success\":false,\"Error\":\"Out of memory\"}"));
   if (msg.reply){
     nats->publish(msg.reply,(char *)buffer->get());
   }
@@ -687,7 +684,9 @@ void sendDataNats( NATS::msg msg)
   buffer->unlock();
   releaseJSONBufferLock();
 }
-
+/***
+ * this is the handler to receive standard WLED json payload
+ */
 void nats_WLED_handler(NATS::msg msg) { 
   DEBUG_PRINTLN("[NATS] WLED Handler");
   DEBUG_PRINT("GOT MESSAGE FROM ") ;
@@ -731,7 +730,9 @@ void nats_WLED_handler(NATS::msg msg) {
 }
 
 
-
+/***
+ * publish live led data on thge ...WLED.Live subject
+ */
 
 bool sendLiveLedsNats()
 {
@@ -787,7 +788,7 @@ bool sendLiveLedsNats()
   }
 
   /// TODO  send buffer to Nats server
-  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + cmDNS;
   
   String live_topic = natspath + String(".WLED.Live");
   DEBUG_PRINTLN(live_topic);

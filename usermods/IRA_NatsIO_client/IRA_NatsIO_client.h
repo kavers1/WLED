@@ -6,13 +6,14 @@
 //#include "wled.h"
 #include "base64.hpp"
 #include "ir_data_packet.h"
+#include <map>
 
 
 uint    ext_mode = 15;  // This is to read in the 4 mode configuration pins (external), defaults on 15 = no pins connected
 String  mac_string = "";     // MAC Address in string format
 uint    ir_delay = 0;   // counter to time the IR delay effect
 uint    post = 0;       // counter to post status messages
-
+std::map<String,int> subscriptions;
 
 #include "ArduinoNats.h"
 #include "defines.h"
@@ -81,15 +82,10 @@ void wifi_setMACstring() {
   byte mac[6];
   WiFi.macAddress(mac);
   mac_string =  String(mac[5], HEX) + 
-//                String("_") +
                 String(mac[4], HEX) + 
-//                String("_") +
                 String(mac[3], HEX) + 
-//                String("_") +
                 String(mac[2], HEX) + 
-//                String("_") +
                 String(mac[1], HEX) + 
-//                String("_") +
                 String(mac[0], HEX);
 }
 
@@ -184,63 +180,52 @@ void nats_on_connect(const char* msg) {
   // area3001.ira.{group}.device.{deviceid}.outputs.{output}.{RGB|DMX|WLED}.{payload}
   // dus nats_root_topic zetten op "are3001.ira.dome.device"
   
-  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + mac_string;
+  String natspath = natssetup.natsTopic + String(".") + natssetup.natsGroup + String(".devices.") + cmDNS;
 
   String nats_debug_blink_topic = natspath + String(".blink");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_debug_blink_topic);
-  nats->subscribe(nats_debug_blink_topic.c_str(), nats_debug_blink_handler);
+  subscriptions[String(".blink")] = 
+    nats->subscribe(nats_debug_blink_topic.c_str(), nats_debug_blink_handler);
 
   String nats_mode_topic = natspath + String(".mode");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_mode_topic);
-  nats->subscribe(nats_mode_topic.c_str(), nats_mode_handler);
+  subscriptions[String(".mode")]=
+    nats->subscribe(nats_mode_topic.c_str(), nats_mode_handler);
 
   String nats_ping_topic = natspath + String(".ping");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_ping_topic);
-  nats->subscribe(nats_ping_topic.c_str(), nats_ping_handler);
+  subscriptions[String(".ping")]=
+    nats->subscribe(nats_ping_topic.c_str(), nats_ping_handler);
   
   String nats_reset_topic = natspath + String(".reset");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_reset_topic);
-  nats->subscribe(nats_reset_topic.c_str(), nats_reset_handler);
+  subscriptions[String(".reset")]=
+    nats->subscribe(nats_reset_topic.c_str(), nats_reset_handler);
 
   String nats_config_topic = natspath + String(".config");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_config_topic);
-  nats->subscribe(nats_config_topic.c_str(), nats_config_handler);
+  subscriptions[String(".config")]=
+    nats->subscribe(nats_config_topic.c_str(), nats_config_handler);
+
+  String nats_WLED_topic = natspath + String(".WLED");
+  subscriptions[String(".WLED")]=
+    nats->subscribe(nats_WLED_topic.c_str(), nats_WLED_handler);
 
   //@TODO the following only need to subscribe upon mode change!
   String nats_dmx_topic = natspath + String(".dmx");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_dmx_topic);
-  nats->subscribe(nats_dmx_topic.c_str(), nats_dmx_frame_handler);
+  subscriptions[String(".dmx")]=
+    nats->subscribe(nats_dmx_topic.c_str(), nats_dmx_frame_handler);
 
   String nats_delta_dmx_topic = natspath + String(".deltadmx");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_delta_dmx_topic);
-  nats->subscribe(nats_delta_dmx_topic.c_str(), nats_dmx_delta_frame_handler);
+  subscriptions[String(".deltadmx")]=
+    nats->subscribe(nats_delta_dmx_topic.c_str(), nats_dmx_delta_frame_handler);
 
   String nats_rgb_topic = natspath + String(".rgb");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_rgb_topic);
-  nats->subscribe(nats_rgb_topic.c_str(), nats_rgb_frame_handler);
+  subscriptions[String(".rgb")]=
+    nats->subscribe(nats_rgb_topic.c_str(), nats_rgb_frame_handler);
 
   String nats_fx_topic = natspath + String(".fx");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_fx_topic);
-  nats->subscribe(nats_fx_topic.c_str(), nats_fx_handler);
+  subscriptions[String(".fx")]=
+    nats->subscribe(nats_fx_topic.c_str(), nats_fx_handler);
 
   String nats_name_topic = natspath + String(".name");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_name_topic);
-  nats->subscribe(nats_name_topic.c_str(), nats_name_handler);
-
-  String nats_WLED_topic = natspath + String(".WLED");
-//  DEBUG_PRINT("[NATS] Subscribing: ");
-//  DEBUG_PRINTLN(nats_name_topic);
-  nats->subscribe(nats_WLED_topic.c_str(), nats_WLED_handler);
+  subscriptions[String(".name")]=
+    nats->subscribe(nats_name_topic.c_str(), nats_name_handler);
 
   nats_announce();
 }

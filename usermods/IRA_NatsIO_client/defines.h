@@ -41,4 +41,7 @@
 #define MAX_PIXELS        255       // @TODO this needs to increase, but then memory map needs to be adjusted
 
 #define _IR_ENABLE_DEFAULT_ false     // This has been moved to compiler arguments
+
+#define IRA_HARDWARE    "IRA"
+#define IRA_HW_VERSION  "2.0"
 //#define DECODE_JVC          true
